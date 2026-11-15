@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-type ScenarioId = "synthetic-phish" | "voice-clone" | "automated-recon";
+type ScenarioId = "synthetic-phish" | "voice-clone" | "automated-recon" | "email-triage";
 type Run = { id: string; scenario: ScenarioId; startedAt: string; events: string[] };
 
 const runs = new Map<string, Run>();
 const scenarios: Record<ScenarioId, { title: string; category: string; risk: string }> = {
   "synthetic-phish": { title: "Synthetic phishing", category: "Generative social engineering", risk: "High" },
   "voice-clone": { title: "Voice clone callback", category: "Deepfake impersonation", risk: "Critical" },
-  "automated-recon": { title: "Automated reconnaissance", category: "AI-assisted discovery", risk: "Medium" }
+  "automated-recon": { title: "Automated reconnaissance", category: "AI-assisted discovery", risk: "Medium" },
+  "email-triage": { title: "Email triage", category: "BEC red-flag detection", risk: "High" }
 };
 
 const json = (res: ServerResponse, status: number, data: unknown) => {

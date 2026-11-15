@@ -26,3 +26,5 @@ Import the repository into Vercel with the project root set to this folder. No c
 - `POST /api/runs/:runId/events` — records a short local telemetry event.
 
 Run state is held in memory and is intentionally not persisted.
+
+The frontend uses URL hash navigation (`#scenarios`, `#signals`, `#telemetry`, `#playbook`, or `#settings`) so refreshing a page keeps the current workspace open.
