@@ -14,6 +14,10 @@ npm start
 
 Open `http://localhost:3000`.
 
+## Deploy to Vercel
+
+Import the repository into Vercel with the project root set to this folder. No custom build command or output directory is required; `vercel.json` maps the `public/` frontend and `api/index.ts` serverless function automatically.
+
 ## API
 
 - `GET /api/health` — safe-simulation service health.
