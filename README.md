@@ -1,30 +1,19 @@
-# Project #6: Business Email Compromise enhanced by AI
+# AI-Enhanced Business Email Compromise
 
-Red Team Lab is a safe, controlled training interface for studying how AI can be misused in BEC campaigns: synthetic phishing, deepfake voice impersonation, and automated reconnaissance. It is designed for defender education and contains no real targets, message delivery, external integrations, or operational attack instructions.
+This website is an interactive, controlled simulation for learning about Business Email Compromise (BEC), especially how AI can enhance phishing, impersonation, and reconnaissance. It provides Red Team and Blue Team perspectives, fictional scenarios, threat signals, telemetry, and safe defensive decision-making without contacting real targets or sending real messages.
 
-## Run locally
+API: Custom REST API (no external API) built for the simulation:
+- `GET /api/health` — checks that the safe-simulation service is running.
+- `GET /api/scenarios` — returns the available fictional BEC scenarios and their risk levels.
+- `POST /api/runs` — creates an in-memory simulation run for a selected scenario.
+- `POST /api/runs/:runId/events` — records short telemetry events for an active simulation run.
 
-Requires Node.js 18 or newer.
+Frontend: HTML, CSS, and vanilla JavaScript
 
-```bash
-npm install
-npm run build
-npm start
-```
+Backend: Node.js HTTP server and TypeScript serverless API; stores simulation runs in memory only.
 
-Open `http://localhost:3000`.
+Deployment: Vercel
 
-## Deploy to Vercel
+Created by: Shamym Iftikhar, Ruwail Fatima, Romaisa Fatima
 
-Import the repository into Vercel with the project root set to this folder. No custom build command or output directory is required; `vercel.json` maps the `public/` frontend and `api/index.ts` serverless function automatically.
-
-## API
-
-- `GET /api/health` — safe-simulation service health.
-- `GET /api/scenarios` — available fictional research vectors.
-- `POST /api/runs` — starts a contained run for a supported scenario.
-- `POST /api/runs/:runId/events` — records a short local telemetry event.
-
-Run state is held in memory and is intentionally not persisted.
-
-The frontend uses URL hash navigation (`#scenarios`, `#signals`, `#telemetry`, `#playbook`, or `#settings`) so refreshing a page keeps the current workspace open.
+Website: bec-with-ai.vercel.app
