@@ -16,4 +16,4 @@ Deployment: Vercel
 
 Created by: Shamym Iftikhar, Ruwail Fatima, Romaisa Fatima
 
-Website: bec-with-ai.vercel.app
+Website: [bec-with-ai.vercel.app](https://bec-with-ai.vercel.app)
