@@ -37,6 +37,19 @@ const formatEvent = (event) => {
 const themeButton = document.querySelector(".theme-toggle");
 const themeCheck = document.querySelector(".theme-check");
 const perspectiveButtons = document.querySelectorAll("[data-perspective]");
+const headerActions = document.querySelector(".header-actions");
+const aboutButton = document.createElement("button");
+aboutButton.className = "about-toggle";
+aboutButton.type = "button";
+aboutButton.dataset.view = "about";
+aboutButton.setAttribute("aria-label", "About this lab");
+aboutButton.textContent = "ⓘ";
+headerActions.insertBefore(aboutButton, themeButton);
+const aboutView = document.createElement("div");
+aboutView.className = "view";
+aboutView.dataset.panel = "about";
+aboutView.innerHTML = `<section class="about-hero about-project"><div><p class="kicker">ABOUT THIS PROJECT</p><h1>Understanding <em>BEC</em><br />in an AI-enabled world.</h1><div class="about-project-copy"><p>This website is a project by Shamym Iftikhar, Ruwail Fatima and Romaisa Fatima for their 5th semester's "Cyber Law, Crime and Warfare" project.</p><p>This interactive simulation introduces Business Email Compromise (BEC) and shows how AI can make phishing, impersonation, and reconnaissance more convincing. It presents both Red Team (offensive) and Blue Team (defensive) perspectives so users can study how attacks develop and how defenders interrupt them.</p><p>Users can explore fictional scenarios, identify threat signals, review safe browser-session telemetry, and practice verification, containment, and reporting decisions.</p><p>All activities use synthetic content in a controlled environment. No real messages are sent, no real targets are contacted, and no delivery workflow is provided.</p><p>Github of Shamym Iftikhar: <a href="https://github.com/sakura0503" target="_blank" rel="noreferrer">github.com/sakura0503</a></p></div></div><div class="about-mark">◈<small>SAFE<br />LAB</small></div></section>`;
+document.querySelector(".content").append(aboutView);
 const getPerspective = () => localStorage.getItem("bec-perspective") === "blue" ? "blue" : "red";
 const sidebar = document.querySelector(".sidebar");
 const drawerBackdrop = document.querySelector(".drawer-backdrop");
@@ -72,7 +85,33 @@ const perspectiveCopy = {
     scenarioTitle: "Choose an attack vector to study",
     scenarioCopy: "Open a contained exercise and inspect the attacker technique, AI misuse, and defender interruption points.",
     signalsTitle: "Signals worth investigating",
-    signalsCopy: "Patterns are presented as defensive indicators, not operational instructions."
+    signalsCopy: "Patterns are presented as defensive indicators, not operational instructions.",
+    signals: [
+      ["Unusual urgency + account change", "Synthetic phishing", "94%", "REVIEW", "high"],
+      ["Caller avoids known callback route", "Voice clone", "88%", "ESCALATE", "critical"],
+      ["Role data clustered by model", "Automated recon", "76%", "MONITOR", "medium"]
+    ],
+    summary: [
+      ["09", "Active indicators", "Across three AI vectors", "cyan"],
+      ["03", "High-priority cues", "Pressure, identity, access", "red"],
+      ["01", "Safe next move", "Pause before proceeding", "green"]
+    ],
+    guidance: ["Map the signal", "Ask what changed, who benefits, and which trusted process can verify the request.", "Begin with evidence, not assumptions."],
+    playbook: {
+      title: "Map the attack chain",
+      copy: "Study how a fictional AI-assisted BEC scenario develops, then mark the point where a defender can interrupt it.",
+      cards: [
+        ["01", "Observe the pressure", "Identify urgency, secrecy, and authority cues without producing a real message or contacting a target."],
+        ["02", "Trace the AI lift", "Mark where synthetic context, impersonation, or public signals make the fictional scenario more convincing."],
+        ["03", "Record the stop point", "Document the safest interruption and the evidence a defender would need to act." ]
+      ],
+      sections: {
+        checklist: ["Keep the scenario fictional", "Mark each persuasion cue", "Name the defender interruption"],
+        evidence: ["Pressure or secrecy language", "Synthetic identity markers", "The moment verification was possible"],
+        mistakes: ["Treating realism as proof", "Skipping containment", "Recording target-like details"],
+        flow: ["Observe", "Label", "Interrupt", "Debrief"]
+      }
+    }
   },
   blue: {
     label: "Blue Team perspective",
@@ -86,8 +125,69 @@ const perspectiveCopy = {
     scenarioTitle: "Choose a defensive exercise",
     scenarioCopy: "Open a contained exercise and practice detecting, verifying, containing, and reporting the AI-assisted threat.",
     signalsTitle: "Investigate the warning signs",
-    signalsCopy: "Use the evidence to detect, verify, contain, and report AI-driven BEC patterns."
+    signalsCopy: "Use the evidence to detect, verify, contain, and report AI-driven BEC patterns.",
+    signals: [
+      ["Sender domain differs from vendor record", "Synthetic phishing", "97%", "VERIFY", "high"],
+      ["Callback request breaks trusted process", "Voice clone", "91%", "CONTAIN", "critical"],
+      ["Public role data over-collected", "Automated recon", "83%", "REPORT", "medium"]
+    ],
+    summary: [
+      ["03", "Controls to test", "Verify, contain, report", "cyan"],
+      ["97%", "Top confidence", "Vendor identity mismatch", "red"],
+      ["100%", "Safe posture", "No action without proof", "green"]
+    ],
+    guidance: ["Defender checkpoint", "Use an independent directory, preserve the evidence, and hold the request until verified.", "Every signal should end in a documented control."],
+    playbook: {
+      title: "Interrupt the attack chain",
+      copy: "Three controls that work across synthetic phishing, voice cloning, and automated discovery.",
+      cards: [
+        ["01", "Pause the pressure", "Urgency, secrecy, and unusual requests are signals to stop the workflow — not reasons to speed up."],
+        ["02", "Verify independently", "Use a trusted directory, known number, or established process outside the suspicious message."],
+        ["03", "Report the pattern", "Preserve the fictional evidence and share it with defenders so the next attempt is easier to catch."]
+      ],
+      sections: {
+        checklist: ["Pause before replying or paying", "Use a trusted channel", "Report and preserve evidence"],
+        evidence: ["Sender and domain details", "Unusual request or timing", "Verification and escalation record"],
+        mistakes: ["Relying on the message thread", "Ignoring time pressure", "Deleting useful evidence"],
+        flow: ["Pause", "Verify", "Contain", "Report"]
+      }
+    }
   }
+};
+const renderPlaybook = (playbook) => {
+  const view = document.querySelector('[data-panel="playbook"]');
+  view.querySelector(".page-title h1").textContent = playbook.title;
+  view.querySelector(".page-title>p:last-child").textContent = playbook.copy;
+  view.querySelector(".playbook-grid").innerHTML = playbook.cards.map(([number, title, copy]) => `<article><span>${number}</span><h3>${title}</h3><p>${copy}</p></article>`).join("");
+  let tools = view.querySelector(".playbook-tools");
+  if (!tools) {
+    tools = document.createElement("div");
+    tools.className = "playbook-tools";
+    view.querySelector(".playbook-grid").after(tools);
+  }
+  const sectionLabels = { checklist: "Quick checklist", evidence: "Evidence to collect", mistakes: "Common mistakes", flow: "Response flow" };
+  tools.innerHTML = Object.entries(playbook.sections).map(([key, items]) => `<article class="playbook-tool ${key}"><h3>${sectionLabels[key]}</h3><ul>${items.map((item, index) => `<li>${key === "flow" ? `<b>${String(index + 1).padStart(2, "0")}</b>` : "✓"} ${item}</li>`).join("")}</ul></article>`).join("");
+};
+const renderSignalExtras = (copy) => {
+  const table = document.querySelector(".signal-table");
+  let overview = document.querySelector("#signal-overview");
+  if (!overview) {
+    overview = document.createElement("div");
+    overview.id = "signal-overview";
+    table.parentElement.insertBefore(overview, table);
+  }
+  overview.innerHTML = copy.summary.map(([value, label, detail, tone]) => `<article class="signal-summary ${tone}"><strong>${value}</strong><b>${label}</b><small>${detail}</small></article>`).join("");
+  let guidance = document.querySelector("#signal-guidance");
+  if (!guidance) {
+    guidance = document.createElement("aside");
+    guidance.id = "signal-guidance";
+    table.parentElement.append(guidance);
+  }
+  guidance.innerHTML = `<span class="guidance-icon">✦</span><div><b>${copy.guidance[0]}</b><p>${copy.guidance[1]}</p><small>${copy.guidance[2]}</small></div>`;
+};
+const renderSignals = (signals) => {
+  const table = document.querySelector(".signal-table");
+  table.innerHTML = `<div class="table-head"><span>SIGNAL</span><span>VECTOR</span><span>CONFIDENCE</span><span>STATUS</span></div>${signals.map(([signal, vector, confidence, status, severity]) => `<div><b>${signal}</b><span>${vector}</span><strong>${confidence}</strong><em class="severity ${severity}">${status}</em></div>`).join("")}`;
 };
 const applyPerspective = (perspective) => {
   const selected = perspective === "blue" ? "blue" : "red";
@@ -105,6 +205,9 @@ const applyPerspective = (perspective) => {
   document.querySelector("#scenario-copy").textContent = copy.scenarioCopy;
   document.querySelector("#signals-title").textContent = copy.signalsTitle;
   document.querySelector("#signals-copy").textContent = copy.signalsCopy;
+  renderPlaybook(copy.playbook);
+  renderSignalExtras(copy);
+  renderSignals(copy.signals);
   perspectiveButtons.forEach((button) => {
     const active = button.dataset.perspective === selected;
     button.classList.toggle("active", active);
@@ -128,7 +231,7 @@ const openModal = (title, copy, content, kicker = "SAFE SIMULATION") => {
   modal.setAttribute("aria-hidden", "false");
 };
 const closeModal = () => { modal.classList.remove("open", "simulation-modal"); modal.setAttribute("aria-hidden", "true"); };
-const validViews = new Set(["overview", "scenarios", "signals", "telemetry", "playbook", "settings", "simulation"]);
+const validViews = new Set(["overview", "scenarios", "signals", "telemetry", "playbook", "settings", "simulation", "about"]);
 const showView = (name, updateUrl = true) => {
   if (!validViews.has(name)) name = "overview";
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("view-active", view.dataset.panel === name));
