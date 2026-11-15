@@ -322,8 +322,28 @@ html,body{overflow-x:hidden}
   }
 }
 
+@media(max-width:720px){
+  .topbar{
+    position:fixed!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    z-index:10!important;
+  }
+  .content{
+    padding-top:80px!important;
+  }
+}
+
 /* Keep the desktop navigation and persistent footer compact on every workspace. */
 @media(min-width:721px){
+  .topbar{
+    position:sticky!important;
+    top:0!important;
+    z-index:10!important;
+    background:color-mix(in srgb,var(--bg) 94%,transparent)!important;
+    backdrop-filter:blur(10px);
+  }
   .sidebar{
     position:fixed!important;
     top:0!important;
@@ -338,14 +358,12 @@ html,body{overflow-x:hidden}
   }
   .sidebar nav{
     flex:0 0 auto!important;
-    overflow:hidden!important;
+    overflow:visible!important;
     padding-bottom:0!important;
   }
   .side-footer{
-    position:absolute!important;
-    left:14px!important;
-    right:14px!important;
-    bottom:18px!important;
+    position:static!important;
+    flex:0 0 auto!important;
     margin-top:12px!important;
   }
   main{
