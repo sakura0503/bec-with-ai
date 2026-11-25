@@ -128,6 +128,13 @@ const safeText = (value: unknown, maxLength: number): value is string =>
 const recipientFor = (scenario: ScenarioId): string =>
   scenario === "payroll-change" ? "payroll@example.test" : "finance@example.test";
 
+const senderFor = (scenario: ScenarioId): string =>
+  scenario === "payroll-change"
+    ? "People Operations <people@example.test>"
+    : scenario === "vendor-change"
+      ? "Vendor Records <records@example.test>"
+      : "Accounts Team <accounts@example.test>";
+
 const validateOutput = (value: unknown, scenario: ScenarioId): GeneratedScenario => {
   if (!isRecord(value) ||
       !safeText(value.title, 80) ||
@@ -148,9 +155,6 @@ const validateOutput = (value: unknown, scenario: ScenarioId): GeneratedScenario
   }
 
   if (!isRecord(value.email) ||
-      !safeText(value.email.senderName, 64) ||
-      !safeText(value.email.senderAddress, 80) ||
-      !/^[a-z0-9._-]+@example\.test$/i.test(value.email.senderAddress) ||
       !safeText(value.email.subject, 100) ||
       !safeText(value.email.body, 600)) {
     throw new ScenarioGenerationError(502, "OpenRouter returned email content that failed the training-safety checks.");
@@ -161,7 +165,7 @@ const validateOutput = (value: unknown, scenario: ScenarioId): GeneratedScenario
     evidence: value.evidence,
     clues,
     email: [
-      `${value.email.senderName} <${value.email.senderAddress}>`,
+      senderFor(scenario),
       recipientFor(scenario),
       value.email.subject,
       value.email.body
@@ -180,18 +184,17 @@ export const generateScenario = async (
 
   const definition = scenarioDefinitions[scenario];
   const emailInstruction = definition.kind === "email"
-    ? "Include an email object with senderName, senderAddress, subject, and body. Use only a fictional senderAddress ending in @example.test. The body must clearly be a training sample, request no real action, and recommend independent verification."
+    ? 'Include an email object with only "subject" and "body". The server supplies a fixed fictional sender and recipient. The body must clearly be a training sample, request no real action, and recommend independent verification.'
     : "Set email to null.";
-  const userPrompt = `Create one fresh, fictional ${perspective === "red" ? "Red Team tabletop" : "Blue Team defensive"} training scenario for topic "${definition.title}" (${definition.category}). Its safe learning focus is: ${definition.safeFocus}. Return only valid JSON with this shape: {"title":"short scenario title","evidence":"short fictional case summary","clues":["defensive cue one","defensive cue two","defensive cue three"],"email":null}. ${emailInstruction} Never include real organizations or people, URLs, phone numbers, credentials, numeric payment details, instructions to evade controls, or text designed to persuade someone to act. Do not generate actions, answer choices, or an answer key.`;
+  const emailShape = definition.kind === "email" ? '{"subject":"short fictional subject","body":"short training-only message"}' : "null";
+  const userPrompt = `Create one fresh, fictional ${perspective === "red" ? "Red Team tabletop" : "Blue Team defensive"} training scenario for topic "${definition.title}" (${definition.category}). Its safe learning focus is: ${definition.safeFocus}. Return only valid JSON with this shape: {"title":"short scenario title","evidence":"short fictional case summary","clues":["defensive cue one","defensive cue two","defensive cue three"],"email":${emailShape}}. ${emailInstruction} Never include real organizations or people, URLs, phone numbers, credentials, numeric payment details, instructions to evade controls, or text designed to persuade someone to act. Do not generate actions, answer choices, or an answer key.`;
   const emailSchema = {
     type: "object",
     properties: {
-      senderName: { type: "string" },
-      senderAddress: { type: "string" },
-      subject: { type: "string" },
-      body: { type: "string" }
+      subject: { type: "string", maxLength: 100 },
+      body: { type: "string", maxLength: 600 }
     },
-    required: ["senderName", "senderAddress", "subject", "body"],
+    required: ["subject", "body"],
     additionalProperties: false
   };
   const outputSchema = {

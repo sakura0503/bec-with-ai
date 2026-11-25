@@ -1536,3 +1536,105 @@ html.light .call-duration{color:#71849a}
   }
   .call-duration{font-size:7px}
 }
+.sms-phone{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  width:min(100% - 28px,390px);
+  min-height:360px;
+  margin:18px auto;
+  padding:15px 14px 12px;
+  border:6px solid #34485d;
+  border-radius:28px;
+  background:#0e1825;
+  box-shadow:0 12px 30px #0005;
+  color:#d5e2ed;
+  font-family:Arial,sans-serif;
+}
+.sms-status-bar{
+  display:flex;
+  justify-content:space-between;
+  color:#8ca3b8;
+  font:8px "DM Mono",monospace;
+}
+.sms-contact{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding-bottom:11px;
+  border-bottom:1px solid #28394c;
+}
+.sms-contact-avatar{
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  background:#27434d;
+  color:#91ded7;
+  font-size:11px;
+  font-weight:700;
+}
+.sms-contact b,.sms-contact small{display:block}
+.sms-contact b{font-size:11px}
+.sms-contact small,.sms-context,.sms-timestamp,.sms-safety{
+  color:#8498ac;
+  font-size:8px;
+}
+.sms-contact small{margin-top:3px}
+.sms-context{
+  padding:7px 9px;
+  border:1px solid #27394c;
+  border-radius:5px;
+  font-family:"DM Mono",monospace;
+}
+.sms-thread{
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:9px;
+}
+.sms-timestamp{align-self:center}
+.sms-bubble{
+  max-width:88%;
+  padding:10px 12px 7px;
+  border:1px solid #2a4359;
+  border-radius:14px 14px 14px 4px;
+  background:#192b3c;
+  color:#d4e0ea;
+  font-size:10px;
+  line-height:1.55;
+}
+.sms-bubble p{margin:0 0 7px}
+.sms-bubble p:last-of-type{margin-bottom:5px}
+.sms-bubble time{
+  display:block;
+  color:#8196aa;
+  font:7px "DM Mono",monospace;
+  text-align:right;
+}
+.sms-compose{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #293d51;
+  border-radius:18px;
+  color:#71869b;
+  font-size:9px;
+}
+.sms-compose b{
+  display:grid;
+  place-items:center;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#21384a;
+  color:#9db1c3;
+}
+.sms-safety{text-align:center}
+@media(max-width:720px){
+  .sms-phone{width:calc(100% - 20px);min-height:330px;margin:12px auto}
+}

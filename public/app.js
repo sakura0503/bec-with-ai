@@ -362,6 +362,10 @@ const renderEmailClient = ({ sender, recipient, subject, body, time = "Today, 10
   const paragraphs = String(body).split(/\n+/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
   return `<div class="mail-client"><aside class="mail-folders" aria-label="Mailbox folders"><div class="mail-app-name"><span>✉</span> Maildesk</div><div class="mail-safe-label">SIMULATION ONLY</div><div class="mail-folder active"><span>▣ Inbox</span><b>1</b></div><div class="mail-folder"><span>☆ Starred</span></div><div class="mail-folder"><span>◷ Snoozed</span></div><div class="mail-folder"><span>↗ Sent</span></div><div class="mail-folder"><span>▤ Drafts</span></div></aside><section class="mail-main" aria-label="Fictional email"><div class="mail-list-bar"><b>Inbox</b><span>1 message · Training sample</span></div><div class="mail-toolbar"><span>‹</span><span>Archive</span><span>Report</span><span>Delete</span><i></i><span>⋯</span></div><article class="mail-message"><div class="mail-subject-line"><h2>${escapeHtml(subject)}</h2><span>SIMULATED</span></div><div class="mail-sender-row"><span class="mail-avatar">${escapeHtml(initials)}</span><div class="mail-sender-meta"><b>${escapeHtml(senderName)}</b><span>${senderAddress ? `&lt;${escapeHtml(senderAddress)}&gt;` : "Fictional sender"}</span><small>to ${escapeHtml(recipient)}</small></div><time>${escapeHtml(time)}</time></div><div class="mail-message-body">${paragraphs}</div><div class="mail-inline-actions"><span>↩ Reply</span><span>↪ Forward</span><small>Actions are disabled in this exercise</small></div></article></section></div>`;
 };
+const renderSmsClient = ({ subject, body }) => {
+  const paragraphs = String(body).split(/\n+/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  return `<section class="sms-phone" aria-label="Text-message simulation"><div class="sms-status-bar"><span>SIMULATION</span><span>•••</span></div><header class="sms-contact"><span class="sms-contact-avatar">SS</span><div><b>Supplier Support</b><small>Simulated contact · Replies disabled</small></div></header><div class="sms-context">Exercise: ${escapeHtml(subject)}</div><div class="sms-thread"><span class="sms-timestamp">Today · Training sample</span><article class="sms-bubble">${paragraphs}<time>10:42</time></article></div><div class="sms-compose" aria-disabled="true"><span>Reply disabled in this exercise</span><b aria-hidden="true">+</b></div><small class="sms-safety">No message is sent to a real phone or contact.</small></section>`;
+};
 const generateScenarioVariant = async (scenario, perspective, variantIndex, requestId) => {
   try {
     const response = await fetch("/api/scenarios/generate", {
@@ -401,11 +405,11 @@ const vectorExercises = {
   "synthetic-phish": {
     type: "email",
     red: [
-      { title: "Invoice pressure review", kicker: "RED TEAM · CONTAINED MESSAGE LAB", evidence: "Review a synthetic invoice-change message and label the pressure and identity cues. The sample is non-deliverable.", clues: ["Urgency changes decision quality", "Sender identity needs independent validation", "Keep all sample content isolated"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Fictional supplier <billing@vendor.example.test>", "finance@example.test", "Invoice review request", "A fictional invoice request asks for a quick review. No payment details or real links are included."] },
-      { title: "Supplier impersonation tabletop", kicker: "RED TEAM · SYNTHETIC SCENARIO", evidence: "Examine a made-up supplier notification as a tabletop exercise; focus on the control that would stop an unsafe action.", clues: ["A familiar display name is not proof", "Unexpected account changes need a second channel", "Do not turn the sample into a sendable lure"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Sample contact <notice@supplier.example.test>", "ap@example.test", "Account detail notice", "This fictional notice references an account update. Treat it as untrusted until checked through an established process."] }
+      { title: "Invoice pressure review", kicker: "RED TEAM · CONTAINED MESSAGE LAB", evidence: "Review a synthetic invoice-change message and label the pressure and identity cues. The sample is non-deliverable.", clues: ["Urgency changes decision quality", "Sender identity needs independent validation", "Keep all sample content isolated"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Supplier Accounts <billing@vendor.example.test>", "finance@example.test", "Invoice review request", "A fictional invoice request asks for a quick review. No payment details or real links are included."] },
+      { title: "Supplier impersonation tabletop", kicker: "RED TEAM · SYNTHETIC SCENARIO", evidence: "Examine a made-up supplier notification as a tabletop exercise; focus on the control that would stop an unsafe action.", clues: ["A familiar display name is not proof", "Unexpected account changes need a second channel", "Do not turn the sample into a sendable lure"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Supplier Desk <notice@supplier.example.test>", "ap@example.test", "Account detail notice", "This fictional notice references an account update. Treat it as untrusted until checked through an established process."] }
     ],
     blue: [
-      { title: "Synthetic phishing", kicker: "BLUE TEAM · MESSAGE REVIEW", evidence: "A fictional supplier email requests an invoice review and creates time pressure.", clues: ["Unexpected urgency", "Sender identity requires confirmation", "Payment changes need independent verification"], actions: [["reply", "Reply in the message thread"], ["verify", "Confirm with a known supplier contact"], ["process", "Process the change now"]], correct: "verify", email: ["Fictional supplier <billing@vendor.example.test>", "finance@example.test", "Invoice review before close", "Please review this fictional invoice change today. The message has not been verified and should not be acted on yet."] },
+      { title: "Synthetic phishing", kicker: "BLUE TEAM · MESSAGE REVIEW", evidence: "A fictional supplier email requests an invoice review and creates time pressure.", clues: ["Unexpected urgency", "Sender identity requires confirmation", "Payment changes need independent verification"], actions: [["reply", "Reply in the message thread"], ["verify", "Confirm with a known supplier contact"], ["process", "Process the change now"]], correct: "verify", email: ["Supplier Accounts <billing@vendor.example.test>", "finance@example.test", "Invoice review before close", "Please review this fictional invoice change today. The message has not been verified and should not be acted on yet."] },
       { title: "Supplier message verification", kicker: "BLUE TEAM · INBOX EXERCISE", evidence: "A synthetic supplier note asks staff to review a revised invoice outside the usual schedule.", clues: ["Unexpected timing", "Changed payment context", "No independent confirmation"], actions: [["reply", "Reply to the sender"], ["verify", "Use the supplier contact already on file"], ["process", "Accept the update as valid"]], correct: "verify", email: ["Sample accounts contact <accounts@supplier.example.test>", "ap@example.test", "Revised invoice details", "This fictional message references revised invoice details. Verify the request independently before making any account changes."] }
     ]
   },
@@ -434,11 +438,11 @@ const vectorExercises = {
   "vendor-change": {
     type: "email",
     red: [
-      { title: "Vendor-change control rehearsal", kicker: "RED TEAM · PAYMENT SAFETY TABLETOP", evidence: "Use a fictional supplier-change request to identify where dual approval and independent verification should stop an unsafe update.", clues: ["The sample cannot update a real record", "A second channel is the key control", "Keep the exercise non-deliverable"], actions: [["label", "Identify the control gaps"], ["verify", "Map independent confirmation"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Fictional vendor <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice describes a supplier record change for discussion only. Do not update records based on the sample."] },
+      { title: "Vendor-change control rehearsal", kicker: "RED TEAM · PAYMENT SAFETY TABLETOP", evidence: "Use a fictional supplier-change request to identify where dual approval and independent verification should stop an unsafe update.", clues: ["The sample cannot update a real record", "A second channel is the key control", "Keep the exercise non-deliverable"], actions: [["label", "Identify the control gaps"], ["verify", "Map independent confirmation"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Vendor Records <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice describes a supplier record change for discussion only. Do not update records based on the sample."] },
       { title: "Supplier-record tabletop", kicker: "RED TEAM · FICTIONAL PROCESS REVIEW", evidence: "Examine a made-up request to change supplier details and map the approval checkpoint, without drafting a real request.", clues: ["Record changes can redirect funds", "Approval should be separated", "Use fictional details only"], actions: [["label", "List the safeguards"], ["verify", "Identify the trusted verification route"], ["contain", "Keep the exercise offline and synthetic"]], correct: "contain", email: ["Sample vendor desk <change@vendor.example.test>", "finance@example.test", "Supplier details exercise", "This is a fictional supplier-record exercise. No account data is provided and no update should be made."] }
     ],
     blue: [
-      { title: "Vendor change request", kicker: "BLUE TEAM · SUPPLIER VERIFICATION", evidence: "A fictional vendor message asks for a change to stored supplier details.", clues: ["Unverified account change", "Request arrived outside the usual process", "Existing contact details are available for a callback"], actions: [["accept", "Update the record from the message"], ["verify", "Confirm using the contact already on file"], ["reply", "Ask the sender to confirm in the same thread"]], correct: "verify", email: ["Fictional vendor <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice asks for a supplier record update. Confirm through the established contact and approval process."] },
+      { title: "Vendor change request", kicker: "BLUE TEAM · SUPPLIER VERIFICATION", evidence: "A fictional vendor message asks for a change to stored supplier details.", clues: ["Unverified account change", "Request arrived outside the usual process", "Existing contact details are available for a callback"], actions: [["accept", "Update the record from the message"], ["verify", "Confirm using the contact already on file"], ["reply", "Ask the sender to confirm in the same thread"]], correct: "verify", email: ["Vendor Records <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice asks for a supplier record update. Confirm through the established contact and approval process."] },
       { title: "Supplier detail verification", kicker: "BLUE TEAM · CHANGE CONTROL", evidence: "A simulated request asks staff to revise a supplier profile before the next payment run.", clues: ["Timing adds pressure", "The request changes a trusted record", "Require independent confirmation and dual approval"], actions: [["update", "Make the requested change"], ["verify", "Pause and confirm through a trusted channel"], ["forward", "Forward the request without review"]], correct: "verify", email: ["Fictional supplier contact <profile@supplier.example.test>", "payables@example.test", "Profile update needed", "A fictional supplier-profile update is pending. Do not change the record until independently confirmed."] }
     ]
   },
@@ -449,8 +453,8 @@ const vectorExercises = {
       { title: "Employee-record safety review", kicker: "RED TEAM · PROCESS TABLETOP", evidence: "Discuss a made-up request to alter an employee record and document the checks that prevent unauthorized changes.", clues: ["Sensitive changes need strong verification", "Do not use real staff details", "Separate request and approval roles"], actions: [["label", "Identify the safeguards"], ["verify", "Map a trusted verification step"], ["contain", "Keep the exercise fictional"]], correct: "contain", email: ["Synthetic people operations <people@example.test>", "payroll@example.test", "Record review exercise", "This is a non-operational tabletop prompt with no personal or payment information."] }
     ],
     blue: [
-      { title: "Payroll change review", kicker: "BLUE TEAM · EMPLOYEE-RECORD CHECK", evidence: "A fictional request asks to change payroll information shortly before a processing date.", clues: ["Sensitive record change", "Short notice", "Identity and approval must be checked independently"], actions: [["change", "Apply the change immediately"], ["verify", "Pause and use the established verification process"], ["reply", "Request confirmation in the same email thread"]], correct: "verify", email: ["Fictional HR contact <hr@example.test>", "payroll@example.test", "Payroll record review", "A synthetic request asks for a payroll record change. Verify identity and approval through established channels."] },
-      { title: "Employee detail change alert", kicker: "BLUE TEAM · PAYROLL SAFEGUARD", evidence: "The simulated payroll queue flags an employee-detail update submitted outside the usual review window.", clues: ["Unexpected timing", "Sensitive employee record", "Use dual approval and notify the security team if suspicious"], actions: [["approve", "Approve the pending change"], ["hold", "Hold and verify through the HR process"], ["ignore", "Dismiss the alert as routine"]], correct: "hold", email: ["Synthetic HR operations <updates@example.test>", "payroll@example.test", "Pending employee detail change", "This fictional queue notice requires independent identity checks and documented approval before any change."] }
+      { title: "Payroll change review", kicker: "BLUE TEAM · EMPLOYEE-RECORD CHECK", evidence: "A fictional request asks to change payroll information shortly before a processing date.", clues: ["Sensitive record change", "Short notice", "Identity and approval must be checked independently"], actions: [["change", "Apply the change immediately"], ["verify", "Pause and use the established verification process"], ["reply", "Request confirmation in the same email thread"]], correct: "verify", email: ["People Operations <hr@example.test>", "payroll@example.test", "Payroll record review", "A synthetic request asks for a payroll record change. Verify identity and approval through established channels."] },
+      { title: "Employee detail change alert", kicker: "BLUE TEAM · PAYROLL SAFEGUARD", evidence: "The simulated payroll queue flags an employee-detail update submitted outside the usual review window.", clues: ["Unexpected timing", "Sensitive employee record", "Use dual approval and notify the security team if suspicious"], actions: [["approve", "Approve the pending change"], ["hold", "Hold and verify through the HR process"], ["ignore", "Dismiss the alert as routine"]], correct: "hold", email: ["People Operations <updates@example.test>", "payroll@example.test", "Pending employee detail change", "This fictional queue notice requires independent identity checks and documented approval before any change."] }
     ]
   }
 };
@@ -469,11 +473,19 @@ const openVectorExercise = (scenario, variantIndex = state.variantIndex) => {
   let simulation;
   if (exercise.email) {
     const [sender, recipient, subject, body] = exercise.email;
-    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>MAILBOX / INBOX</span><span>${sourceLabel} · NOT SENT</span></div>${renderEmailClient({ sender, recipient, subject, body })}${actionButtons}</div>${cluePanel}</div>`;
+    const senderAddress = sender.match(/<([^>]+)>$/)?.[1];
+    const senderRole = scenario === "payroll-change"
+      ? "People Operations"
+      : scenario === "vendor-change" ? "Vendor Records" : "Accounts Team";
+    const displayedSender = `${senderRole}${senderAddress ? ` <${senderAddress}>` : ""}`;
+    const message = scenario === "synthetic-phish"
+      ? `<div class="inbox-toolbar"><span>MESSAGE REVIEW / SIMULATED SMS</span><span>${sourceLabel} · NOT SENT</span></div>${renderSmsClient({ subject, body })}`
+      : `<div class="inbox-toolbar"><span>MAILBOX / INBOX</span><span>${sourceLabel} · NOT SENT</span></div>${renderEmailClient({ sender: displayedSender, recipient, subject, body })}`;
+    simulation = `<div class="simulation-layout"><div class="workstation">${message}${actionButtons}</div>${cluePanel}</div>`;
   } else if (exercise.type === "call") {
     const markers = exercise.clues.map((clue) => `<b>${escapeHtml(clue)}</b>`).join("");
     const waveform = Array.from({ length: 19 }, () => "<i></i>").join("");
-    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>CALL REVIEW / SIMULATED INBOUND</span><span>${sourceLabel} · NOT CONNECTED</span></div><article class="call-console"><div class="caller-avatar">FC</div><div class="caller-identity"><b>Fictional caller</b><small>Claimed identity · Not independently verified</small></div><span class="call-status simulation-status">● SIMULATION</span><div class="call-controls"><span class="call-play" aria-hidden="true">▶</span><div class="call-waveform" aria-hidden="true">${waveform}</div><span class="call-duration">00:00 · AUDIO DISABLED</span></div><blockquote>${escapeHtml(exercise.evidence)}</blockquote><div class="call-transcript"><span>REVIEW MARKERS</span>${markers}</div></article>${actionButtons}</div>${cluePanel}</div>`;
+    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>CALL REVIEW / SIMULATED INBOUND</span><span>${sourceLabel} · NOT CONNECTED</span></div><article class="call-console"><div class="caller-avatar">OC</div><div class="caller-identity"><b>Operations caller</b><small>Identity unverified · Audio disabled</small></div><span class="call-status simulation-status">● SIMULATION</span><div class="call-controls"><span class="call-play" aria-hidden="true">▶</span><div class="call-waveform" aria-hidden="true">${waveform}</div><span class="call-duration">00:00 · AUDIO DISABLED</span></div><blockquote>${escapeHtml(exercise.evidence)}</blockquote><div class="call-transcript"><span>REVIEW MARKERS</span>${markers}</div></article>${actionButtons}</div>${cluePanel}</div>`;
   } else {
     const signalCards = exercise.clues.map((clue, index) => `<div><b>SYNTHETIC CUE 0${index + 1}</b><span>${escapeHtml(clue)}</span></div>`).join("");
     simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>EXPOSURE MONITOR / FICTIONAL DATA</span><span>${sourceLabel} · NO LIVE SOURCES</span></div><article class="recon-console"><div class="recon-score"><strong>03</strong><small>SAFE CUES</small></div><div><b>${escapeHtml(exercise.title)}</b><small>Synthetic signals · no real identities</small><p>${escapeHtml(exercise.evidence)}</p></div></article><div class="evidence-grid">${signalCards}</div>${actionButtons}</div>${cluePanel}</div>`;
@@ -497,16 +509,16 @@ const openEmailTriage = (variantIndex = state.variantIndex) => {
       redSubject: "Synthetic invoice review",
       redCopy: "This isolated tabletop sample highlights how an invoice-change request can create pressure. It has no recipient, real domain, or send action.",
       blueTitle: "Email triage",
-      sender: "Morgan Lee <morgan.lee@vendor.example.test>",
+      sender: "Supplier Accounts <accounts@vendor.example.test>",
       subject: "Invoice account review",
       body: "A fictional supplier message asks for an account update before the next payment run. Verify through a known contact before acting."
     },
     {
       redTitle: "Supplier identity tabletop",
-      redSubject: "Fictional supplier notice",
+      redSubject: "Supplier account notice",
       redCopy: "This contained exercise examines an unexpected supplier notice and the point where independent verification prevents an unsafe change.",
       blueTitle: "Supplier notice review",
-      sender: "Taylor Reed <taylor.reed@supplier.example.test>",
+      sender: "Vendor Records <records@supplier.example.test>",
       subject: "Supplier details need review",
       body: "A synthetic notice references revised supplier details. The request is unverified and should be held for a trusted-channel check."
     }
@@ -527,8 +539,8 @@ const openEmailTriage = (variantIndex = state.variantIndex) => {
   const sourceLabel = generated ? "OPENROUTER FREE MODEL" : "SAVED TRAINING SAMPLE";
   if (getPerspective() === "red") {
     const email = renderEmailClient({
-      sender: generatedEmail?.[0] ?? "Synthetic training sample <training@example.test>",
-      recipient: "No recipient · isolated",
+      sender: generatedEmail?.[0] ?? "Accounts Team <accounts@example.test>",
+      recipient: "finance@example.test",
       subject: variant.redSubject,
       body: `${variant.redCopy}\nNo real recipient, domain, or send action is available.`,
       time: "TABLETOP EXERCISE"
@@ -550,7 +562,7 @@ const openEmailTriage = (variantIndex = state.variantIndex) => {
     sender: variant.sender,
     recipient: generatedEmail?.[1] ?? "finance@example.test",
     subject: variant.subject,
-    body: `Hello team,\n${variant.body}\nRegards,\nSynthetic supplier contact`
+    body: `Hello team,\n${variant.body}\nRegards,\nAccounts Team`
   });
   const analystNotes = (generated?.clues ?? ["Confirm identity independently", "Hold sensitive record changes", "Report suspicious requests"])
     .map((clue) => `<span>${escapeHtml(clue)}</span>`).join("");
