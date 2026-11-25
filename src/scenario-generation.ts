@@ -217,7 +217,7 @@ export const generateScenario = async (
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-embed-1b:free",
+        model: process.env.OPENROUTER_MODEL || "recursive/flint-v1.0:free",
         messages: [
           {
             role: "system",
@@ -229,7 +229,7 @@ export const generateScenario = async (
           type: "json_schema",
           json_schema: { name: "safe_training_scenario", strict: true, schema: outputSchema }
         },
-        max_tokens: 700,
+        max_tokens: 2000,
         temperature: 0.8,
         stream: false
       }),

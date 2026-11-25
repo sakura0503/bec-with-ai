@@ -17,18 +17,22 @@ Deployment: Vercel
 
 ## Optional OpenRouter scenario generation
 
-The scenario library works without an API key using its saved fictional samples. To generate a fresh, safety-checked variation when a scenario opens, configure an OpenRouter API key on the server. The key is never needed in the browser. The default model is OpenRouter's `openrouter/free` router, which selects an available free model.
+The scenario library works without an API key using its saved fictional samples. To generate a fresh, safety-checked variation when a scenario opens, configure an OpenRouter API key on the server. The key is never needed in the browser. The default model is `recursive/flint-v1.0:free`; free-model availability and rate limits may vary.
 
 ### Local development (Windows PowerShell)
 
-Set the key for the current PowerShell session, then start the app:
+Set `OPENROUTER_API_KEY` in a local `.env` file (and optionally set `OPENROUTER_MODEL`), then start the app:
+
+```env
+OPENROUTER_API_KEY=your-key
+OPENROUTER_MODEL=recursive/flint-v1.0:free
+```
 
 ```powershell
-$env:OPENROUTER_API_KEY = "your-key"
 npm run dev
 ```
 
-The key is not saved by this command and must be set again in a new terminal session. Never add it to `public/app.js`, commit it, or send it in chat. Without the key, the app continues to use its saved samples.
+The `.env` file is ignored by Git. Never add the key to `public/app.js`, commit it, or send it in chat. Without the key, the app continues to use its saved samples.
 
 ### Vercel
 
