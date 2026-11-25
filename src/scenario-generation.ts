@@ -217,7 +217,7 @@ export const generateScenario = async (
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free",
+        model: process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-embed-1b:free",
         messages: [
           {
             role: "system",
