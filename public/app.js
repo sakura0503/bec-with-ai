@@ -1,10 +1,20 @@
-const state = { runId: null, scenario: null, toastTimer: null };
+const state = { runId: null, scenario: null, variantIndex: 0, generatedScenario: null, scenarioInteracted: false, generationRequestId: 0, toastTimer: null };
 const telemetryKey = "red-team-telemetry";
+const scenarioIds = ["synthetic-phish", "voice-clone", "automated-recon", "email-triage", "vendor-change", "payroll-change"];
 const scenarioLabels = {
   "synthetic-phish": "Synthetic phishing",
   "voice-clone": "Voice clone callback",
   "automated-recon": "Automated reconnaissance",
-  "email-triage": "Email triage"
+  "email-triage": "Email triage",
+  "vendor-change": "Vendor change request",
+  "payroll-change": "Payroll change review"
+};
+const chooseVariantIndex = (scenario) => {
+  const key = `bec-last-variant-${getPerspective()}-${scenario}`;
+  const previous = sessionStorage.getItem(key);
+  const next = previous === "0" ? 1 : 0;
+  sessionStorage.setItem(key, String(next));
+  return next;
 };
 const getTelemetry = () => {
   try {
@@ -248,12 +258,14 @@ const showView = (name, updateUrl = true) => {
 const viewFromUrl = () => {
   const hash = window.location.hash.slice(1);
   if (hash.startsWith("simulation/")) {
-    const scenario = hash.slice("simulation/".length);
-    if (["synthetic-phish", "voice-clone", "automated-recon", "email-triage"].includes(scenario)) {
+    const [scenario, rawVariantIndex] = hash.slice("simulation/".length).split("/");
+    if (scenarioIds.includes(scenario)) {
+      const variantIndex = rawVariantIndex === "1" ? 1 : 0;
       state.scenario = scenario;
+      state.variantIndex = variantIndex;
       showView("simulation", false);
-      renderSimulationPage(scenario);
-      if (!state.runId) void startScenario(scenario);
+      renderSimulationPage(scenario, undefined, undefined, undefined, undefined, variantIndex);
+      if (!state.runId) void startScenario(scenario, variantIndex);
       return;
     }
   }
@@ -294,128 +306,239 @@ const renderTelemetry = () => {
   }
   list.innerHTML = events.slice().reverse().map((item) => `<div class="telemetry-row"><span class="telemetry-status ${item.event.endsWith("-success") || item.event === "triage-success" ? "passed" : item.event.endsWith("-fail") || item.event === "triage-fail" ? "failed" : "neutral"}">${item.event.endsWith("-success") || item.event === "triage-success" ? "✓" : item.event.endsWith("-fail") || item.event === "triage-fail" ? "!" : "·"}</span><div><b>${item.label}</b><small>${scenarioLabels[item.scenario] ?? "Simulation"} · ${new Date(item.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></div><time>${new Date(item.at).toLocaleDateString([], { month: "short", day: "numeric" })}</time></div>`).join("");
 };
-function renderSimulationPage(scenario, title, kicker, copy, content) {
+function renderSimulationPage(scenario, title, kicker, copy, content, variantIndex = state.variantIndex) {
   if (!title) {
     if (scenario === "email-triage") {
-      openEmailTriage();
+      openEmailTriage(variantIndex);
     } else {
-      openVectorExercise(scenario);
+      openVectorExercise(scenario, variantIndex);
     }
     return;
   }
   const page = document.querySelector("#simulation-page");
-  page.innerHTML = `<div class="simulation-page-head"><div><p class="kicker">${kicker}</p><h1>${title}</h1><p>${copy}</p></div><button class="text-btn simulation-exit" type="button">← Exit simulation</button></div><div id="simulation-content">${content}</div><div class="simulation-safety">✓ Fictional data · No messages sent · No real systems contacted</div>`;
+  page.innerHTML = `<div class="simulation-page-head"><div><p class="kicker">${escapeHtml(kicker)}</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(copy)}</p></div><button class="text-btn simulation-exit" type="button">← Exit simulation</button></div><div id="simulation-content">${content}</div><div class="simulation-safety">✓ Fictional data · No messages sent · No real systems contacted</div>`;
   page.querySelector(".simulation-exit").addEventListener("click", () => showView("scenarios"));
 }
-const openSimulationPage = (scenario) => {
-  const nextUrl = `${window.location.pathname}${window.location.search}#simulation/${scenario}`;
-  if (window.location.hash !== `#simulation/${scenario}`) window.history.pushState({ simulation: scenario }, "", nextUrl);
+const openSimulationPage = (scenario, variantIndex) => {
+  const hash = `#simulation/${scenario}/${variantIndex}`;
+  const nextUrl = `${window.location.pathname}${window.location.search}${hash}`;
+  if (window.location.hash !== hash) window.history.pushState({ simulation: scenario, variantIndex }, "", nextUrl);
   showView("simulation", false);
-  renderSimulationPage(scenario);
+  renderSimulationPage(scenario, undefined, undefined, undefined, undefined, variantIndex);
 };
-const startScenario = async (scenario) => {
+const startScenario = async (scenario, variantIndex = chooseVariantIndex(scenario)) => {
+  const requestId = ++state.generationRequestId;
+  const perspective = getPerspective();
   state.scenario = scenario;
-  openSimulationPage(scenario);
+  state.variantIndex = variantIndex;
+  state.runId = null;
+  state.generatedScenario = null;
+  state.scenarioInteracted = false;
+  openSimulationPage(scenario, variantIndex);
+  void generateScenarioVariant(scenario, perspective, variantIndex, requestId);
   try {
     const response = await fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario }) });
     if (!response.ok) throw new Error("Could not start the safe simulation.");
     const result = await response.json();
+    if (requestId !== state.generationRequestId) return;
     state.runId = result.run.id;
     await recordEvent("scenario-opened");
   } catch (error) {
     toast(error.message);
   }
 };
-const openVectorExercise = (scenario) => {
-  const exercises = {
-    "synthetic-phish": {
-      title: "Synthetic phishing",
-      kicker: "VECTOR 01 · AI-GENERATED LURE",
-      type: "email",
-      sender: "Nadia Chen <nadia.chen@northstar-loglstics.co>",
-      recipient: "accounts@acme-corp.com",
-      subject: "Updated bank details — invoice 4817",
-      time: "Today, 10:42",
-      body: "Hi team,\\n\\nWe have updated our receiving account for invoice 4817. Please use the attached form before 16:00 so payment is not delayed. I am in back-to-back meetings, so please do not call.\\n\\nThanks,\\nNadia\\nAccounts Payable",
-      clues: ["Lookalike sender domain", "Urgency before a deadline", "Payment details changed in the request"],
-      actions: [["reply", "Reply to the sender"], ["verify", "Verify with a known supplier contact"], ["process", "Approve the bank-detail change"]],
-      correct: "verify"
-    },
-    "voice-clone": {
-      title: "Voice clone callback",
-      kicker: "VECTOR 02 · SYNTHETIC IMPERSONATION",
-      type: "call",
-      evidence: "A fictional executive calls from an unrecognized number asking for an urgent transfer. The voice sounds familiar, but the caller refuses the normal callback process.",
-      clues: ["Unusual urgency", "Caller avoids the known callback route", "Request bypasses approval controls"],
-      actions: [["trust", "Continue the call and trust the voice"], ["verify", "End the call and use the company directory"], ["approve", "Approve the transfer while they wait"]],
-      correct: "verify"
-    },
-    "automated-recon": {
-      title: "Automated reconnaissance",
-      kicker: "VECTOR 03 · AI-ASSISTED DISCOVERY",
-      type: "recon",
-      evidence: "The monitoring console has grouped fictional public posts, staff roles, and technology references into a profile of your organisation.",
-      clues: ["Public details are combined at scale", "Staff roles reveal likely approval paths", "Technology clues expose useful context"],
-      actions: [["ignore", "Close the alert as harmless public data"], ["report", "Open an investigation and review exposed information"], ["share", "Forward the profile internally without review"]],
-      correct: "report"
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "\"": "&quot;",
+  "'": "&#39;"
+}[character]));
+const renderEmailClient = ({ sender, recipient, subject, body, time = "Today, 10:42 AM" }) => {
+  const senderMatch = sender.match(/^(.*?)\s*<([^>]+)>$/);
+  const senderName = senderMatch ? senderMatch[1] : sender;
+  const senderAddress = senderMatch ? senderMatch[2] : "";
+  const initials = senderName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "??";
+  const paragraphs = String(body).split(/\n+/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  return `<div class="mail-client"><aside class="mail-folders" aria-label="Mailbox folders"><div class="mail-app-name"><span>✉</span> Maildesk</div><div class="mail-safe-label">SIMULATION ONLY</div><div class="mail-folder active"><span>▣ Inbox</span><b>1</b></div><div class="mail-folder"><span>☆ Starred</span></div><div class="mail-folder"><span>◷ Snoozed</span></div><div class="mail-folder"><span>↗ Sent</span></div><div class="mail-folder"><span>▤ Drafts</span></div></aside><section class="mail-main" aria-label="Fictional email"><div class="mail-list-bar"><b>Inbox</b><span>1 message · Training sample</span></div><div class="mail-toolbar"><span>‹</span><span>Archive</span><span>Report</span><span>Delete</span><i></i><span>⋯</span></div><article class="mail-message"><div class="mail-subject-line"><h2>${escapeHtml(subject)}</h2><span>SIMULATED</span></div><div class="mail-sender-row"><span class="mail-avatar">${escapeHtml(initials)}</span><div class="mail-sender-meta"><b>${escapeHtml(senderName)}</b><span>${senderAddress ? `&lt;${escapeHtml(senderAddress)}&gt;` : "Fictional sender"}</span><small>to ${escapeHtml(recipient)}</small></div><time>${escapeHtml(time)}</time></div><div class="mail-message-body">${paragraphs}</div><div class="mail-inline-actions"><span>↩ Reply</span><span>↪ Forward</span><small>Actions are disabled in this exercise</small></div></article></section></div>`;
+};
+const generateScenarioVariant = async (scenario, perspective, variantIndex, requestId) => {
+  try {
+    const response = await fetch("/api/scenarios/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario, perspective })
+    });
+    let result = {};
+    try {
+      result = await response.json();
+    } catch {
+      // Keep the saved training sample available if the endpoint returns a non-JSON error.
     }
-  };
-  const exercise = exercises[scenario];
-  if (getPerspective() === "red") {
-    const redExercises = {
-      "synthetic-phish": {
-        title: "Lure design rehearsal",
-        kicker: "RED TEAM · CONTROLLED PHISHING LAB",
-        evidence: "Use a fictional supplier identity to study which language patterns make an invoice lure feel convincing. This rehearsal never creates a sendable message.",
-        clues: ["Personalisation increases credibility", "Deadlines create pressure", "Payment changes create the critical decision point"],
-        actions: [["personalize", "Add fictional context to the draft"], ["pressure", "Add an urgent deadline"], ["contain", "Keep the lure in the isolated lab"]],
-        correct: "contain"
-      },
-      "voice-clone": {
-        title: "Impersonation rehearsal",
-        kicker: "RED TEAM · SYNTHETIC VOICE LAB",
-        evidence: "Review a fictional executive-call script and identify the social-engineering pressure being modelled. No voice is generated or transmitted.",
-        clues: ["Authority is used to accelerate approval", "Familiarity can bypass skepticism", "A blocked callback is the interruption point"],
-        actions: [["authority", "Increase executive authority in the script"], ["urgency", "Add a time-sensitive transfer request"], ["contain", "Keep the script as a non-deliverable sample"]],
-        correct: "contain"
-      },
-      "automated-recon": {
-        title: "Discovery-chain rehearsal",
-        kicker: "RED TEAM · CONTROLLED RECON LAB",
-        evidence: "Inspect how fictional public signals could be grouped into a target profile. The lab uses synthetic records and does not query real people or systems.",
-        clues: ["Role data can reveal approval paths", "Separate public clues become stronger when grouped", "Synthetic records keep the exercise contained"],
-        actions: [["cluster", "Group more fictional public signals"], ["prioritize", "Prioritize a fictional approval path"], ["contain", "Keep the dataset synthetic and isolated"]],
-        correct: "contain"
-      }
-    };
-    Object.assign(exercise, redExercises[scenario]);
+    if (!response.ok) throw new Error(result?.error || "AI scenario generation failed.");
+    const generated = result?.scenario;
+    const needsEmail = scenario !== "voice-clone" && scenario !== "automated-recon";
+    if (!generated || typeof generated.title !== "string" || typeof generated.evidence !== "string" ||
+        !Array.isArray(generated.clues) || generated.clues.length !== 3 ||
+        (needsEmail
+          ? !Array.isArray(generated.email) || generated.email.length !== 4 || !generated.email.every((part) => typeof part === "string")
+          : generated.email !== undefined) ||
+        requestId !== state.generationRequestId ||
+        state.scenario !== scenario || getPerspective() !== perspective ||
+        state.scenarioInteracted) return;
+    state.generatedScenario = generated;
+    renderSimulationPage(scenario, undefined, undefined, undefined, undefined, variantIndex);
+    toast("Fresh fictional scenario generated with OpenRouter.");
+  } catch (error) {
+    if (requestId === state.generationRequestId && state.scenario === scenario &&
+        getPerspective() === perspective && !state.scenarioInteracted) {
+      const message = error instanceof Error ? error.message : "Unknown generation error.";
+      toast(`AI generation unavailable: ${message} Showing the saved scenario instead.`);
+    }
   }
+};
+const vectorExercises = {
+  "synthetic-phish": {
+    type: "email",
+    red: [
+      { title: "Invoice pressure review", kicker: "RED TEAM · CONTAINED MESSAGE LAB", evidence: "Review a synthetic invoice-change message and label the pressure and identity cues. The sample is non-deliverable.", clues: ["Urgency changes decision quality", "Sender identity needs independent validation", "Keep all sample content isolated"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Fictional supplier <billing@vendor.example.test>", "finance@example.test", "Invoice review request", "A fictional invoice request asks for a quick review. No payment details or real links are included."] },
+      { title: "Supplier impersonation tabletop", kicker: "RED TEAM · SYNTHETIC SCENARIO", evidence: "Examine a made-up supplier notification as a tabletop exercise; focus on the control that would stop an unsafe action.", clues: ["A familiar display name is not proof", "Unexpected account changes need a second channel", "Do not turn the sample into a sendable lure"], actions: [["label", "Identify the risk cues"], ["verify", "Map the verification point"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Sample contact <notice@supplier.example.test>", "ap@example.test", "Account detail notice", "This fictional notice references an account update. Treat it as untrusted until checked through an established process."] }
+    ],
+    blue: [
+      { title: "Synthetic phishing", kicker: "BLUE TEAM · MESSAGE REVIEW", evidence: "A fictional supplier email requests an invoice review and creates time pressure.", clues: ["Unexpected urgency", "Sender identity requires confirmation", "Payment changes need independent verification"], actions: [["reply", "Reply in the message thread"], ["verify", "Confirm with a known supplier contact"], ["process", "Process the change now"]], correct: "verify", email: ["Fictional supplier <billing@vendor.example.test>", "finance@example.test", "Invoice review before close", "Please review this fictional invoice change today. The message has not been verified and should not be acted on yet."] },
+      { title: "Supplier message verification", kicker: "BLUE TEAM · INBOX EXERCISE", evidence: "A synthetic supplier note asks staff to review a revised invoice outside the usual schedule.", clues: ["Unexpected timing", "Changed payment context", "No independent confirmation"], actions: [["reply", "Reply to the sender"], ["verify", "Use the supplier contact already on file"], ["process", "Accept the update as valid"]], correct: "verify", email: ["Sample accounts contact <accounts@supplier.example.test>", "ap@example.test", "Revised invoice details", "This fictional message references revised invoice details. Verify the request independently before making any account changes."] }
+    ]
+  },
+  "voice-clone": {
+    type: "call",
+    red: [
+      { title: "Synthetic caller risk review", kicker: "RED TEAM · VOICE SAFETY TABLETOP", evidence: "Discuss a fictional caller claiming to be an executive. No voice is generated, recorded, or transmitted.", clues: ["Familiarity can be simulated", "A request to bypass process is a warning", "Use a known callback route"], actions: [["label", "Label the impersonation warning signs"], ["verify", "Document the independent check"], ["contain", "Keep the exercise fictional and contained"]], correct: "contain" },
+      { title: "Callback-control rehearsal", kicker: "RED TEAM · IDENTITY EXERCISE", evidence: "A tabletop caller asks for a sensitive action while claiming to be unavailable for the normal callback. Identify the safe control.", clues: ["Caller ID is not authentication", "Urgency should not bypass approval", "No real person or transfer is involved"], actions: [["label", "Record the pressure cues"], ["verify", "Map the trusted callback control"], ["contain", "Keep the scenario non-operational"]], correct: "contain" }
+    ],
+    blue: [
+      { title: "Voice clone callback", kicker: "BLUE TEAM · CALL VERIFICATION", evidence: "A fictional executive caller asks for a sensitive action and discourages the usual callback.", clues: ["Unrecognized number", "Request to skip a control", "Pressure to act quickly"], actions: [["trust", "Rely on the familiar-sounding voice"], ["verify", "End the call and use the company directory"], ["approve", "Approve while the caller waits"]], correct: "verify" },
+      { title: "Unusual executive request", kicker: "BLUE TEAM · IDENTITY CHECK", evidence: "A simulated caller claims an urgent schedule conflict and requests an exception to the standard approval process.", clues: ["Urgency and authority are combined", "A process exception is requested", "Identity is not independently confirmed"], actions: [["continue", "Continue using the caller's instructions"], ["verify", "Call back using a trusted number"], ["approve", "Grant the requested exception"]], correct: "verify" }
+    ]
+  },
+  "automated-recon": {
+    type: "recon",
+    red: [
+      { title: "Synthetic exposure tabletop", kicker: "RED TEAM · FICTIONAL DATA LAB", evidence: "Review a wholly synthetic set of public-information categories and identify why aggregating them can raise privacy risk. No real people or systems are queried.", clues: ["Small public clues can combine", "Only synthetic records are used", "Focus on exposure reduction, not collection"], actions: [["label", "Map the privacy risks"], ["review", "Recommend reducing exposed details"], ["contain", "Keep the dataset synthetic"]], correct: "contain" },
+      { title: "Discovery risk mapping", kicker: "RED TEAM · SAFE RESEARCH EXERCISE", evidence: "A fictional dashboard groups generic role and event categories. Discuss defensive exposure without collecting additional data.", clues: ["Aggregation can increase sensitivity", "Avoid real identities", "Document a safe interruption"], actions: [["label", "Mark the risk categories"], ["review", "Recommend a privacy review"], ["contain", "Keep all records fictional"]], correct: "contain" }
+    ],
+    blue: [
+      { title: "Automated reconnaissance", kicker: "BLUE TEAM · EXPOSURE REVIEW", evidence: "A monitor flags an aggregation of fictional staff roles and public event references.", clues: ["Unnecessary detail is grouped", "Role information may reveal process context", "Review exposure and report safely"], actions: [["ignore", "Dismiss because each item was public"], ["report", "Review and report the aggregated exposure"], ["share", "Forward the profile broadly"]], correct: "report" },
+      { title: "Public-information aggregation alert", kicker: "BLUE TEAM · PRIVACY RESPONSE", evidence: "A simulated alert shows generic public-post categories combined into one organisation profile.", clues: ["Aggregation changes the risk", "No real identities are included", "Escalate through the privacy process"], actions: [["dismiss", "Close the alert without review"], ["review", "Assess the exposure and notify the right team"], ["publish", "Share the profile with a wider audience"]], correct: "review" }
+    ]
+  },
+  "vendor-change": {
+    type: "email",
+    red: [
+      { title: "Vendor-change control rehearsal", kicker: "RED TEAM · PAYMENT SAFETY TABLETOP", evidence: "Use a fictional supplier-change request to identify where dual approval and independent verification should stop an unsafe update.", clues: ["The sample cannot update a real record", "A second channel is the key control", "Keep the exercise non-deliverable"], actions: [["label", "Identify the control gaps"], ["verify", "Map independent confirmation"], ["contain", "Keep the sample isolated"]], correct: "contain", email: ["Fictional vendor <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice describes a supplier record change for discussion only. Do not update records based on the sample."] },
+      { title: "Supplier-record tabletop", kicker: "RED TEAM · FICTIONAL PROCESS REVIEW", evidence: "Examine a made-up request to change supplier details and map the approval checkpoint, without drafting a real request.", clues: ["Record changes can redirect funds", "Approval should be separated", "Use fictional details only"], actions: [["label", "List the safeguards"], ["verify", "Identify the trusted verification route"], ["contain", "Keep the exercise offline and synthetic"]], correct: "contain", email: ["Sample vendor desk <change@vendor.example.test>", "finance@example.test", "Supplier details exercise", "This is a fictional supplier-record exercise. No account data is provided and no update should be made."] }
+    ],
+    blue: [
+      { title: "Vendor change request", kicker: "BLUE TEAM · SUPPLIER VERIFICATION", evidence: "A fictional vendor message asks for a change to stored supplier details.", clues: ["Unverified account change", "Request arrived outside the usual process", "Existing contact details are available for a callback"], actions: [["accept", "Update the record from the message"], ["verify", "Confirm using the contact already on file"], ["reply", "Ask the sender to confirm in the same thread"]], correct: "verify", email: ["Fictional vendor <records@vendor.example.test>", "ap@example.test", "Supplier record review", "This synthetic notice asks for a supplier record update. Confirm through the established contact and approval process."] },
+      { title: "Supplier detail verification", kicker: "BLUE TEAM · CHANGE CONTROL", evidence: "A simulated request asks staff to revise a supplier profile before the next payment run.", clues: ["Timing adds pressure", "The request changes a trusted record", "Require independent confirmation and dual approval"], actions: [["update", "Make the requested change"], ["verify", "Pause and confirm through a trusted channel"], ["forward", "Forward the request without review"]], correct: "verify", email: ["Fictional supplier contact <profile@supplier.example.test>", "payables@example.test", "Profile update needed", "A fictional supplier-profile update is pending. Do not change the record until independently confirmed."] }
+    ]
+  },
+  "payroll-change": {
+    type: "email",
+    red: [
+      { title: "Payroll control tabletop", kicker: "RED TEAM · FICTIONAL HR EXERCISE", evidence: "Review a synthetic payroll-change case and identify the control that protects employee records. No employee data or change workflow is present.", clues: ["Payroll data is sensitive", "A second approver can interrupt misuse", "Keep all identities fictional"], actions: [["label", "Map the approval controls"], ["verify", "Name a safe identity check"], ["contain", "Keep the case synthetic"]], correct: "contain", email: ["Fictional HR desk <hr@example.test>", "payroll@example.test", "Payroll process tabletop", "This fictional exercise describes a payroll-change review. It contains no employee or banking details."] },
+      { title: "Employee-record safety review", kicker: "RED TEAM · PROCESS TABLETOP", evidence: "Discuss a made-up request to alter an employee record and document the checks that prevent unauthorized changes.", clues: ["Sensitive changes need strong verification", "Do not use real staff details", "Separate request and approval roles"], actions: [["label", "Identify the safeguards"], ["verify", "Map a trusted verification step"], ["contain", "Keep the exercise fictional"]], correct: "contain", email: ["Synthetic people operations <people@example.test>", "payroll@example.test", "Record review exercise", "This is a non-operational tabletop prompt with no personal or payment information."] }
+    ],
+    blue: [
+      { title: "Payroll change review", kicker: "BLUE TEAM · EMPLOYEE-RECORD CHECK", evidence: "A fictional request asks to change payroll information shortly before a processing date.", clues: ["Sensitive record change", "Short notice", "Identity and approval must be checked independently"], actions: [["change", "Apply the change immediately"], ["verify", "Pause and use the established verification process"], ["reply", "Request confirmation in the same email thread"]], correct: "verify", email: ["Fictional HR contact <hr@example.test>", "payroll@example.test", "Payroll record review", "A synthetic request asks for a payroll record change. Verify identity and approval through established channels."] },
+      { title: "Employee detail change alert", kicker: "BLUE TEAM · PAYROLL SAFEGUARD", evidence: "The simulated payroll queue flags an employee-detail update submitted outside the usual review window.", clues: ["Unexpected timing", "Sensitive employee record", "Use dual approval and notify the security team if suspicious"], actions: [["approve", "Approve the pending change"], ["hold", "Hold and verify through the HR process"], ["ignore", "Dismiss the alert as routine"]], correct: "hold", email: ["Synthetic HR operations <updates@example.test>", "payroll@example.test", "Pending employee detail change", "This fictional queue notice requires independent identity checks and documented approval before any change."] }
+    ]
+  }
+};
+const openVectorExercise = (scenario, variantIndex = state.variantIndex) => {
+  const perspective = getPerspective();
+  const scenarioData = vectorExercises[scenario];
+  const variants = scenarioData?.[perspective];
+  if (!variants) {
+    toast("This scenario is unavailable.");
+    return;
+  }
+  const exercise = { ...variants[variantIndex % variants.length], ...state.generatedScenario, type: scenarioData.type };
   const actionButtons = `<div class="simulation-actions"><b>Choose an action</b><div class="response-grid">${exercise.actions.map(([value, label]) => `<button data-vector-choice="${value}">${label}</button>`).join("")}</div></div>`;
-  const cluePanel = `<aside class="signal-sidebar"><b>Analyst notes</b>${exercise.clues.map((clue) => `<span>• ${clue}</span>`).join("")}</aside>`;
-  let simulation = "";
-  if (exercise.type === "email") {
-    simulation = `<div class="workstation"><div class="inbox-toolbar"><span>INBOX / EXTERNAL</span><span>${exercise.time}</span></div><article class="real-email"><div class="email-meta"><b>${exercise.sender}</b><small>To: ${exercise.recipient} · ${exercise.time}</small><strong>Subject: ${exercise.subject}</strong></div><div class="email-body">${exercise.body.split("\\n").map((line) => `<p>${line || "&nbsp;"}</p>`).join("")}<div class="email-attachment">▧ <b>Updated_payment_form.pdf</b><small>PDF · 84 KB</small></div></div></article>${actionButtons}</div>${cluePanel}`;
+  const cluePanel = `<aside class="signal-sidebar"><b>Analyst notes</b>${exercise.clues.map((clue) => `<span>${escapeHtml(clue)}</span>`).join("")}</aside>`;
+  const sourceLabel = state.generatedScenario ? "OPENROUTER FREE MODEL" : "SAVED TRAINING SAMPLE";
+  let simulation;
+  if (exercise.email) {
+    const [sender, recipient, subject, body] = exercise.email;
+    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>MAILBOX / INBOX</span><span>${sourceLabel} · NOT SENT</span></div>${renderEmailClient({ sender, recipient, subject, body })}${actionButtons}</div>${cluePanel}</div>`;
   } else if (exercise.type === "call") {
-    simulation = `<div class="workstation"><div class="inbox-toolbar"><span>CALL REVIEW / INCOMING</span><span>10:17</span></div><article class="call-console"><div class="caller-avatar">EM</div><div><b>Unknown caller</b><small>+1 (555) 019-2048 · Claimed identity: Evan Mills, CFO</small></div><span class="call-status">● RECORDING</span><blockquote>“I need this transfer approved before the board meeting. Do not call my usual number — I’m between meetings.”</blockquote><div class="call-transcript"><span>TRANSCRIPT MARKERS</span><b>Urgency</b><b>Callback refusal</b><b>Approval bypass</b></div></article>${actionButtons}</div>${cluePanel}`;
+    const markers = exercise.clues.map((clue) => `<b>${escapeHtml(clue)}</b>`).join("");
+    const waveform = Array.from({ length: 19 }, () => "<i></i>").join("");
+    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>CALL REVIEW / SIMULATED INBOUND</span><span>${sourceLabel} · NOT CONNECTED</span></div><article class="call-console"><div class="caller-avatar">FC</div><div class="caller-identity"><b>Fictional caller</b><small>Claimed identity · Not independently verified</small></div><span class="call-status simulation-status">● SIMULATION</span><div class="call-controls"><span class="call-play" aria-hidden="true">▶</span><div class="call-waveform" aria-hidden="true">${waveform}</div><span class="call-duration">00:00 · AUDIO DISABLED</span></div><blockquote>${escapeHtml(exercise.evidence)}</blockquote><div class="call-transcript"><span>REVIEW MARKERS</span>${markers}</div></article>${actionButtons}</div>${cluePanel}</div>`;
   } else {
-    simulation = `<div class="workstation"><div class="inbox-toolbar"><span>THREAT MONITOR / DISCOVERY CLUSTER</span><span>ALERT 0042</span></div><article class="recon-console"><div class="recon-score"><strong>76%</strong><small>CONTEXT RISK</small></div><div><b>Northstar profile cluster</b><small>12 public signals grouped by an automated model</small><p>Staff roles · conference posts · technology references · approval workflow</p></div></article><div class="evidence-grid"><div><b>PUBLIC POSTS</b><span>3 conference updates</span></div><div><b>ROLE DATA</b><span>5 staff profiles</span></div><div><b>TECH STACK</b><span>4 technology clues</span></div></div>${actionButtons}</div>${cluePanel}`;
+    const signalCards = exercise.clues.map((clue, index) => `<div><b>SYNTHETIC CUE 0${index + 1}</b><span>${escapeHtml(clue)}</span></div>`).join("");
+    simulation = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>EXPOSURE MONITOR / FICTIONAL DATA</span><span>${sourceLabel} · NO LIVE SOURCES</span></div><article class="recon-console"><div class="recon-score"><strong>03</strong><small>SAFE CUES</small></div><div><b>${escapeHtml(exercise.title)}</b><small>Synthetic signals · no real identities</small><p>${escapeHtml(exercise.evidence)}</p></div></article><div class="evidence-grid">${signalCards}</div>${actionButtons}</div>${cluePanel}</div>`;
   }
-  const simulationCopy = getPerspective() === "red"
-    ? "Study the fictional attack pattern inside an isolated lab. No message, call, or dataset can reach a real target."
-    : "Work through this fictional workstation and choose the control you would apply. No external action is performed.";
-  renderSimulationPage(scenario, exercise.title, exercise.kicker, simulationCopy, `${simulation}`);
+  const simulationCopy = perspective === "red"
+    ? "Study the fictional risk and safe containment controls. No message, call, or dataset can reach a real target."
+    : "Work through this fictional exercise and choose the control you would apply. No external action is performed.";
+  renderSimulationPage(scenario, exercise.title, exercise.kicker, simulationCopy, simulation, variantIndex);
   document.querySelectorAll("[data-vector-choice]").forEach((button) => button.addEventListener("click", () => {
+    state.scenarioInteracted = true;
     const success = button.dataset.vectorChoice === exercise.correct;
     recordEvent(`${scenario}-${success ? "success" : "fail"}`);
-    document.querySelector("#simulation-content").innerHTML = `<div class="result ${success ? "success" : "fail"}"><strong>${success ? "CONTROL APPLIED · Threat interrupted" : "CONTROL MISSED · Threat remains active"}</strong><small>${success ? "You paused the workflow and selected a safe verification or investigation step." : "The safer move is to pause, use a trusted verification route, and report the pattern to defenders."}</small></div><div class="answer-review"><b>Analyst debrief</b><p>${exercise.clues.join(" · ")}. Familiar language, public information, and realistic context do not make a request trustworthy.</p><button class="primary-btn vector-done">Close simulation</button></div>`;
+    document.querySelector("#simulation-content").innerHTML = `<div class="result ${success ? "success" : "fail"}"><strong>${success ? "CONTROL APPLIED · Threat interrupted" : "CONTROL MISSED · Threat remains active"}</strong><small>${success ? "You paused the workflow and selected a safe verification or investigation step." : "The safer move is to pause, use a trusted verification route, and report the pattern to defenders."}</small></div><div class="answer-review"><b>Analyst debrief</b><p>${exercise.clues.join(" · ")}. Familiar language and realistic context do not establish trust.</p><button class="primary-btn vector-done">Close simulation</button></div>`;
     document.querySelector(".vector-done").addEventListener("click", () => { showView("telemetry"); toast(success ? "Simulation passed · safe control recorded" : "Simulation failed · review the defender playbook"); });
   }));
 };
-const openEmailTriage = () => {
+const openEmailTriage = (variantIndex = state.variantIndex) => {
+  const variants = [
+    {
+      redTitle: "Invoice pressure containment",
+      redSubject: "Synthetic invoice review",
+      redCopy: "This isolated tabletop sample highlights how an invoice-change request can create pressure. It has no recipient, real domain, or send action.",
+      blueTitle: "Email triage",
+      sender: "Morgan Lee <morgan.lee@vendor.example.test>",
+      subject: "Invoice account review",
+      body: "A fictional supplier message asks for an account update before the next payment run. Verify through a known contact before acting."
+    },
+    {
+      redTitle: "Supplier identity tabletop",
+      redSubject: "Fictional supplier notice",
+      redCopy: "This contained exercise examines an unexpected supplier notice and the point where independent verification prevents an unsafe change.",
+      blueTitle: "Supplier notice review",
+      sender: "Taylor Reed <taylor.reed@supplier.example.test>",
+      subject: "Supplier details need review",
+      body: "A synthetic notice references revised supplier details. The request is unverified and should be held for a trusted-channel check."
+    }
+  ];
+  const savedVariant = variants[variantIndex % variants.length];
+  const generated = state.generatedScenario;
+  const generatedEmail = generated?.email;
+  const variant = generated ? {
+    ...savedVariant,
+    redTitle: generated.title,
+    redSubject: generatedEmail?.[2] ?? savedVariant.redSubject,
+    redCopy: generated.evidence,
+    blueTitle: generated.title,
+    sender: generatedEmail?.[0] ?? savedVariant.sender,
+    subject: generatedEmail?.[2] ?? savedVariant.subject,
+    body: generatedEmail?.[3] ?? savedVariant.body
+  } : savedVariant;
+  const sourceLabel = generated ? "OPENROUTER FREE MODEL" : "SAVED TRAINING SAMPLE";
   if (getPerspective() === "red") {
-    const content = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>RED TEAM LAB / LURE DRAFT</span><span>CONTAINED</span></div><article class="real-email"><div class="email-meta"><b>Fictional supplier draft</b><small>Destination: none · Delivery disabled</small><strong>Subject: Invoice update request</strong></div><div class="email-body"><p>This isolated draft demonstrates how an attacker might combine a supplier identity, a payment change, and a deadline.</p><p>No recipient, real domain, or send action is available in this exercise.</p></div></article><div class="simulation-actions"><b>Choose how to keep the rehearsal safe</b><div class="response-grid"><button data-red-triage="personalize">Add more fictional context</button><button data-red-triage="pressure">Add urgency language</button><button data-red-triage="contain">Keep the draft isolated</button></div></div></div><aside class="signal-sidebar"><b>Red Team learning goals</b><span>• Understand persuasion mechanics</span><span>• Identify where defenders can interrupt</span><span>• Never produce or deliver a real lure</span></aside></div>`;
-    renderSimulationPage("email-triage", "Lure construction rehearsal", "RED TEAM · CONTAINED EMAIL LAB", "Study the mechanics of a fictional BEC lure without creating a sendable message.", content);
+    const email = renderEmailClient({
+      sender: generatedEmail?.[0] ?? "Synthetic training sample <training@example.test>",
+      recipient: "No recipient · isolated",
+      subject: variant.redSubject,
+      body: `${variant.redCopy}\nNo real recipient, domain, or send action is available.`,
+      time: "TABLETOP EXERCISE"
+    });
+    const analystNotes = (generated?.clues ?? ["Understand the defensive control points", "Keep all identities and content fictional", "Never produce or deliver a real lure"])
+      .map((clue) => `<span>${escapeHtml(clue)}</span>`).join("");
+    const content = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>MAILBOX / CONTAINED TABLETOP</span><span>${sourceLabel} · UNSENT</span></div>${email}<div class="simulation-actions"><b>Choose a safe learning action</b><div class="response-grid"><button data-red-triage="label">Label the risk cues</button><button data-red-triage="verify">Map the verification control</button><button data-red-triage="contain">Keep the sample isolated</button></div></div></div><aside class="signal-sidebar"><b>Red Team learning goals</b>${analystNotes}</aside></div>`;
+    renderSimulationPage("email-triage", variant.redTitle, "RED TEAM · CONTAINED EMAIL LAB", "Study the mechanics of a fictional BEC scenario without creating a sendable message.", content, variantIndex);
     document.querySelectorAll("[data-red-triage]").forEach((button) => button.addEventListener("click", () => {
+      state.scenarioInteracted = true;
       const safe = button.dataset.redTriage === "contain";
       recordEvent(`email-triage-${safe ? "success" : "fail"}`);
       document.querySelector("#simulation-content").innerHTML = `<div class="result ${safe ? "success" : "fail"}"><strong>${safe ? "LAB CONTAINED · Safe rehearsal selected" : "SAFETY CONTROL MISSED"}</strong><small>${safe ? "The fictional lure remains isolated and cannot be sent." : "Keep attacker-content rehearsals synthetic, non-deliverable, and isolated."}</small></div><div class="answer-review"><b>Red Team debrief</b><p>Understanding pressure patterns is useful only when the exercise cannot reach a real target.</p><button class="primary-btn vector-done">Close simulation</button></div>`;
@@ -423,9 +546,21 @@ const openEmailTriage = () => {
     }));
     return;
   }
-  const content = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>INBOX / PAYMENT REVIEW</span><span>Today, 10:48</span></div><article class="real-email"><div class="email-meta"><b>Elena Morris &lt;elena.morris@northstar-logistics.co&gt;</b><small>To: accounts@acme-corp.com · Today, 10:42</small><strong>Subject: Urgent payment update before 16:00</strong></div><div class="email-body"><p>Hello team,</p><p>I am travelling and need the bank details for our next invoice changed today. Please use the attached form and reply once complete. Do not call as I will be in a meeting.</p><p>Thanks,<br />Elena<br /><small>Chief Operations Officer</small></p><div class="email-attachment">▧ <b>Updated_payment_form.pdf</b><small>PDF · 84 KB</small></div></div></article><div class="triage-stage"><b>Review the message before acting</b><label><input type="checkbox" data-flag="domain" /> Sender uses a lookalike external domain</label><label><input type="checkbox" data-flag="urgency" /> The request creates time pressure</label><label><input type="checkbox" data-flag="payment" /> It asks to change bank details</label><label><input type="checkbox" data-flag="channel" /> It discourages a phone call</label><p class="triage-hint">Select the warning signs you would record in an incident report.</p><button class="primary-btn triage-next">Continue review</button></div></div><aside class="signal-sidebar"><b>Analyst notes</b><span>• Inspect the sender domain</span><span>• Check whether the request changes payment details</span><span>• Use an independent verification channel</span></aside></div>`;
-  renderSimulationPage("email-triage", "Email triage", "EXERCISE 04 · INBOX DECISION", "Review the fictional message as an analyst. No reply, payment, or attachment is sent.", content);
+  const email = renderEmailClient({
+    sender: variant.sender,
+    recipient: generatedEmail?.[1] ?? "finance@example.test",
+    subject: variant.subject,
+    body: `Hello team,\n${variant.body}\nRegards,\nSynthetic supplier contact`
+  });
+  const analystNotes = (generated?.clues ?? ["Confirm identity independently", "Hold sensitive record changes", "Report suspicious requests"])
+    .map((clue) => `<span>${escapeHtml(clue)}</span>`).join("");
+  const content = `<div class="simulation-layout"><div class="workstation"><div class="inbox-toolbar"><span>MAILBOX / PAYMENT REVIEW</span><span>${sourceLabel} · NOT SENT</span></div>${email}<div class="triage-stage"><b>Review the message before acting</b><label><input type="checkbox" data-flag="domain" /> Sender identity or domain needs verification</label><label><input type="checkbox" data-flag="urgency" /> The request creates time pressure</label><label><input type="checkbox" data-flag="payment" /> It refers to a sensitive account change</label><label><input type="checkbox" data-flag="channel" /> It lacks independent confirmation</label><p class="triage-hint">Select the warning signs you would record in an incident report.</p><button class="primary-btn triage-next">Continue review</button></div></div><aside class="signal-sidebar"><b>Analyst notes</b>${analystNotes}</aside></div>`;
+  renderSimulationPage("email-triage", variant.blueTitle, "EXERCISE 04 · INBOX DECISION", "Review the fictional message as an analyst. No reply, payment, or attachment is sent.", content, variantIndex);
+  document.querySelectorAll("[data-flag]").forEach((input) => input.addEventListener("change", () => {
+    state.scenarioInteracted = true;
+  }));
   document.querySelector(".triage-next").addEventListener("click", () => {
+    state.scenarioInteracted = true;
     const selected = [...document.querySelectorAll("[data-flag]:checked")].map((input) => input.dataset.flag);
     const expected = ["domain", "urgency", "payment", "channel"];
     const missed = expected.filter((flag) => !selected.includes(flag));
@@ -435,6 +570,7 @@ const openEmailTriage = () => {
       : `<div class="result fail"><strong>${missed.length} warning sign${missed.length === 1 ? "" : "s"} missed</strong><small>Review the highlighted pressure and verification clues.</small></div>`;
     document.querySelector(".triage-stage").innerHTML = `${flagFeedback}<b>Choose your response</b><div class="response-grid"><button data-response="reply">Reply and ask for details</button><button data-response="pay">Process the update</button><button data-response="verify">Verify using a known number</button><button data-response="report">Report and hold the payment</button></div>`;
     document.querySelectorAll("[data-response]").forEach((button) => button.addEventListener("click", () => {
+      state.scenarioInteracted = true;
       const correct = (button.dataset.response === "verify" || button.dataset.response === "report") && missed.length === 0;
       recordEvent(correct ? "triage-success" : "triage-fail");
       document.querySelector(".triage-stage").innerHTML = `<div class="result ${correct ? "success" : "fail"}"><strong>${correct ? "CONTROL APPLIED · Request contained" : "CONTROL MISSED · Request remains active"}</strong><small>${correct ? "You identified the red flags and stopped the request for independent verification." : "Do not reply, pay, or trust the message. Verify through a known channel and report it to security."}</small></div><div class="answer-review"><b>Analyst debrief</b><p>The lookalike domain, urgency, bank-detail change, and blocked callback route are common BEC indicators.</p><button class="primary-btn triage-done">Close simulation</button></div>`;

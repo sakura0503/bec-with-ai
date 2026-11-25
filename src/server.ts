@@ -3,8 +3,15 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  allowScenarioGeneration,
+  generateScenario,
+  isPerspective,
+  isScenarioId,
+  ScenarioGenerationError,
+  type ScenarioId
+} from "./scenario-generation.js";
 
-type ScenarioId = "synthetic-phish" | "voice-clone" | "automated-recon" | "email-triage";
 type Run = { id: string; scenario: ScenarioId; startedAt: string; events: string[] };
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -14,7 +21,9 @@ const scenarios: Record<ScenarioId, { title: string; category: string; risk: str
   "synthetic-phish": { title: "Synthetic phishing", category: "Generative social engineering", risk: "High" },
   "voice-clone": { title: "Voice clone callback", category: "Deepfake impersonation", risk: "Critical" },
   "automated-recon": { title: "Automated reconnaissance", category: "AI-assisted discovery", risk: "Medium" },
-  "email-triage": { title: "Email triage", category: "BEC red-flag detection", risk: "High" }
+  "email-triage": { title: "Email triage", category: "BEC red-flag detection", risk: "High" },
+  "vendor-change": { title: "Vendor change request", category: "Supplier verification", risk: "High" },
+  "payroll-change": { title: "Payroll change review", category: "Payroll controls", risk: "High" }
 };
 
 const json = (res: ServerResponse, status: number, data: unknown) => {
@@ -65,14 +74,43 @@ const server = createServer(async (req, res) => {
     json(res, 200, Object.entries(scenarios).map(([id, value]) => ({ id, ...value })));
     return;
   }
-  if (method === "POST" && url.pathname === "/api/runs") {
+  if (method === "POST" && url.pathname === "/api/scenarios/generate") {
     const body = await readBody(req);
-    const scenario = body.scenario;
-    if (typeof scenario !== "string" || !(scenario in scenarios)) {
+    if (!isScenarioId(body.scenario)) {
       json(res, 400, { error: "Choose a supported scenario." });
       return;
     }
-    const run: Run = { id: randomUUID(), scenario: scenario as ScenarioId, startedAt: new Date().toISOString(), events: ["run-created"] };
+    if (!isPerspective(body.perspective)) {
+      json(res, 400, { error: "Choose a supported team perspective." });
+      return;
+    }
+    const forwardedFor = req.headers["x-forwarded-for"];
+    const clientId = (typeof forwardedFor === "string" ? forwardedFor.split(",")[0].trim() : "") || req.socket.remoteAddress || "unknown";
+    if (!allowScenarioGeneration(clientId)) {
+      json(res, 429, { error: "Scenario generation limit reached. Try again in a minute." });
+      return;
+    }
+    try {
+      const scenario = await generateScenario(body.scenario, body.perspective);
+      json(res, 200, { scenario, source: "openrouter" });
+    } catch (error) {
+      if (error instanceof ScenarioGenerationError) {
+        json(res, error.statusCode, { error: error.message });
+        return;
+      }
+      console.error("Scenario generation failed.", error);
+      json(res, 502, { error: "Scenario generation failed. The saved training scenario remains available." });
+    }
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/runs") {
+    const body = await readBody(req);
+    const scenario = body.scenario;
+    if (!isScenarioId(scenario)) {
+      json(res, 400, { error: "Choose a supported scenario." });
+      return;
+    }
+    const run: Run = { id: randomUUID(), scenario, startedAt: new Date().toISOString(), events: ["run-created"] };
     runs.set(run.id, run);
     json(res, 201, { run, scenario: scenarios[run.scenario] });
     return;
